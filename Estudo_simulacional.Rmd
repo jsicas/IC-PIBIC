@@ -1,0 +1,270 @@
+---
+title: "Estudo de simulacao"
+output: pdf_document
+header-includes:
+- \usepackage{amssymb}
+---
+
+```{r setup, include=TRUE, message=F}
+knitr::opts_chunk$set(echo=F, fig.align='center',
+                      fig.width=7, fig.height=4)
+
+
+#-------- packages --------#
+library(wavethresh)
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(kableExtra)
+
+
+#-------- Funções definidas --------#
+simulacao <- function(fun_real, SNR, rep=1, policy='sure', type='soft', lambda=0,
+                      filter.number=1, family='DaubExPhase') {
+  # Criando objetos
+  ISE <- vector(mode='double')
+  coef_nulo <- vector(mode='integer')
+  percent_coef_nulo <- vector(mode='double')
+  lambda_armazenado <- vector(mode='double')
+  n <- length(fun_real)
+  barra <- progress::progress_bar$new(total = rep) # barra de progresso
+  
+  for (i in 1:rep) {
+    barra$tick()
+    #message('Repeticao ', i)
+    
+    # Ruido
+    sd_ruido <- sd(fun_real)/SNR  # sd(ruido) = sd(sinal)/SNR
+    ruido <- rnorm(n=n, mean=0, sd=sd_ruido)
+    fun_ruido <- fun_real + ruido  # Adicionando ruido
+    
+    # Wavelet
+    ywt <- wd(fun_ruido, filter.number=filter.number, family=family)  # DWT
+    if (policy == 'u') {
+      sigma <- mad(accessD(ywt, level=nlevelsWT(ywt) - 1))
+      lambda_u <- sigma * sqrt(2 * log(n))
+      lambda_armazenado <- append(lambda_armazenado, lambda_u)
+      ywt_T <- threshold(ywt, policy='manual', type=type, value=lambda_u)
+    } else {
+      lambda_armazenado <- append(lambda_armazenado, threshold(ywt, policy=policy,
+                                     type=type, return.threshold=T)[1])
+      ywt_T <- threshold(ywt, policy=policy, type=type, value=lambda)
+    }
+    fun_estimada <- wr(ywt_T)  # IDWT
+    
+    # ISE e percentual de coeficientes nulos
+    residuo <- fun_real - fun_estimada
+    ISE <- append(ISE, sum(residuo^2)/n)  # sum (\hat{g} - g)/n
+    
+    for (j in 2:(nlevelsWT(ywt_T) - 1)) {
+      coef_nulo <- append(coef_nulo, accessD(ywt_T, lev=j) == 0)
+    }
+    percent_coef_nulo <- append(percent_coef_nulo,
+                                sum(coef_nulo)/length(coef_nulo))
+  }
+  if (policy == 'manual'){lambda_armazenado <- rep(lambda, rep)}
+  return(data.frame('ISE'=ISE,
+                    'PCN'=percent_coef_nulo,
+                    'lambda'=lambda_armazenado))
+}
+```
+
+
+# Função Bumps
+```{r}
+bumps <- DJ.EX()$bumps
+plot(bumps, type='l', main='Função Original', las=1)
+```
+
+# Simulações das propostas de $\lambda$
+
+```{r simulacoes, echo=T}
+n <- 10
+lambda_1 <- simulacao(bumps, SNR=2, rep=n, policy='manual', lambda=1.2)
+lambda_2 <- simulacao(bumps, SNR=2, rep=n, policy='manual', lambda=50)
+lambda_u <- simulacao(bumps, SNR=2, rep=n, policy='u')
+lambda_cv <- simulacao(bumps, SNR=2, rep=n, policy='cv')
+lambda_sure <- simulacao(bumps, SNR=2, rep=n, policy='sure')
+lambda_fdr <- simulacao(bumps, SNR=2, rep=n, policy='fdr')
+```
+
+$x^2 = 0$
+
+# ISE
+```{r tabela.ISE}
+data.frame(
+  'lambda_1'=round(c(min(lambda_1$ISE), quantile(lambda_1$ISE, 0.25, names=F),
+                     median(lambda_1$ISE), mean(lambda_1$ISE),
+                     quantile(lambda_1$ISE, 0.75, names=F), max(lambda_1$ISE),
+                     sd(lambda_1$ISE)), 4),
+           
+  'lambda_2'=round(c(min(lambda_2$ISE), quantile(lambda_2$ISE, 0.25, names=F),
+                     median(lambda_2$ISE), mean(lambda_2$ISE),
+                     quantile(lambda_2$ISE, 0.75, names=F), max(lambda_2$ISE),
+                     sd(lambda_2$ISE)), 4),
+           
+  'lambda_u'=round(c(min(lambda_u$ISE), quantile(lambda_u$ISE, 0.25, names=F),
+                     median(lambda_u$ISE), mean(lambda_u$ISE),
+                     quantile(lambda_u$ISE, 0.75, names=F), max(lambda_u$ISE),
+                     sd(lambda_u$ISE)), 4),
+                      
+  'lambda_cv'=round(c(min(lambda_cv$ISE), quantile(lambda_cv$ISE, 0.25, names=F),
+                      median(lambda_cv$ISE), mean(lambda_cv$ISE),
+                      quantile(lambda_cv$ISE, 0.75, names=F), max(lambda_cv$ISE),
+                      sd(lambda_cv$ISE)), 4),
+                                 
+  'lambda_sure'=round(c(min(lambda_sure$ISE),quantile(lambda_sure$ISE, 0.25, names=F),
+                        median(lambda_sure$ISE), mean(lambda_sure$ISE),
+                        quantile(lambda_sure$ISE, 0.75, names=F),
+                        max(lambda_sure$ISE),
+                        sd(lambda_sure$ISE)), 4),
+                                            
+  'lambda_fdr'=round(c(min(lambda_fdr$ISE), quantile(lambda_fdr$ISE, 0.25, names=F),
+                       median(lambda_fdr$ISE), mean(lambda_fdr$ISE),
+                       quantile(lambda_fdr$ISE, 0.75, names=F),
+                       max(lambda_fdr$ISE),
+                       sd(lambda_fdr$ISE)), 4),
+  
+  row.names=c('Min', 'Q1', 'Median','Mean', 'Q3' ,'Max', 'SD')) %>%
+  kbl(booktabs=T, caption='ISE') %>%
+  kable_styling(position = 'center', latex_options='HOLD_position')
+```
+
+
+## Gráficos do ISE
+
+```{r graficos.1.ISE, fig.height=11, fig.width=8}
+# Juntando ISE
+ISE_bumps <- data.frame('lambda_1'=lambda_1$ISE, 'lambda_2'=lambda_2$ISE,
+                        'lambda_u'=lambda_u$ISE, 'lambda_cv'=lambda_cv$ISE,
+                        'lambda_sure'=lambda_sure$ISE, 'lambda_fdr'=lambda_fdr$ISE)
+
+stack(ISE_bumps) %>% ggplot(aes(x=ind, y=values)) +
+  geom_boxplot() +
+  scale_y_continuous(breaks=seq(0,45, 5)) +
+  labs(title='ISE')
+```
+
+
+```{r graficos.2.ISE, fig.height=9}
+stack(select(ISE_bumps, -lambda_2)) %>% ggplot(aes(x=ind, y=values)) +
+  geom_boxplot() +
+  scale_y_continuous(breaks=seq(0,16, 2)) +
+  labs(title='ISE')
+```
+
+
+# Gráficos do Percentual de Coeficientes Nulos
+```{r tabela.PCN}
+data.frame(
+  'lambda_1'=round(c(min(lambda_1$PCN),
+               quantile(lambda_1$PCN, 0.25, names=F),
+               median(lambda_1$PCN),
+               mean(lambda_1$PCN),
+               quantile(lambda_1$PCN, 0.75, names=F),
+               max(lambda_1$PCN),
+               sd(lambda_1$PCN)), 4),
+
+  'lambda_2'=round(c(min(lambda_2$PCN),
+               quantile(lambda_2$PCN, 0.25, names=F),
+               median(lambda_2$PCN),
+               mean(lambda_2$PCN),
+               quantile(lambda_2$PCN, 0.75, names=F),
+               max(lambda_2$PCN),
+               sd(lambda_2$PCN)), 4),
+
+  'lambda_u'=round(c(min(lambda_u$PCN),
+               quantile(lambda_u$PCN, 0.25, names=F),
+               median(lambda_u$PCN),
+               mean(lambda_u$PCN),
+               quantile(lambda_u$PCN, 0.75, names=F),
+               max(lambda_u$PCN),
+               sd(lambda_u$PCN)), 4),
+
+  'lambda_cv'=round(c(min(lambda_cv$PCN),
+                quantile(lambda_cv$PCN, 0.25, names=F),
+                median(lambda_cv$PCN),
+                mean(lambda_cv$PCN),
+                quantile(lambda_cv$PCN, 0.75, names=F),
+                max(lambda_cv$PCN),
+                sd(lambda_cv$PCN)), 4),
+
+  'lambda_sure'=round(c(min(lambda_sure$PCN),
+                  quantile(lambda_sure$PCN, 0.25, names=F),
+                  median(lambda_sure$PCN),
+                  mean(lambda_sure$PCN),
+                  quantile(lambda_sure$PCN, 0.75, names=F),
+                  max(lambda_sure$PCN),
+                  sd(lambda_sure$PCN)), 4),
+
+  'lambda_fdr'=round(c(min(lambda_fdr$PCN),
+                 quantile(lambda_fdr$PCN, 0.25, names=F),
+                 median(lambda_fdr$PCN),
+                 mean(lambda_fdr$PCN),
+                 quantile(lambda_fdr$PCN, 0.75, names=F),
+                 max(lambda_fdr$PCN),
+                 sd(lambda_fdr$PCN)), 4),
+           
+  row.names=c('Min', 'Q1', 'Median','Mean', 'Q3' ,'Max', 'SD')) %>%
+  kbl(booktabs=T, caption='Percentual de coeficientes nulos') %>%
+  kable_styling(position='center', latex_options='HOLD_position')
+```
+
+
+## Gráfico do Percentual de Coeficientes Nulos
+
+```{r graficos.1.PCN, fig.height=10, fig.width=8}
+# Juntando PCN
+PCN_bumps <- data.frame('lambda_1'=lambda_1$PCN,
+                        'lambda_2'=lambda_2$PCN,
+                        'lambda_u'=lambda_u$PCN,
+                        'lambda_cv'=lambda_cv$PCN,
+                        'lambda_sure'=lambda_sure$PCN,
+                        'lambda_fdr'=lambda_fdr$PCN)
+
+stack(PCN_bumps) %>% ggplot(aes(x=ind, y=values)) +
+  geom_boxplot() +
+  scale_y_continuous(breaks=seq(0.2,1, 0.1)) +
+  labs(title='Percentual de coeficientes nulos')
+```
+
+
+```{r graficos.2.PCN, fig.height=11, fig.width=8}
+stack(select(PCN_bumps, -c(lambda_1, lambda_2))) %>% ggplot(aes(x=ind, y=values)) +
+  geom_boxplot() +
+  scale_y_continuous(breaks = seq(0.7,1, 0.03)) +
+  labs(title='Percentual de coeficientes nulos')
+```
+
+
+# $\lambda$:
+
+```{r}
+# Juntando lambdas
+lambda_bumps <- data.frame('lambda_1'=lambda_1$lambda,
+                           'lambda_2'=lambda_2$lambda,
+                           'lambda_u'=lambda_u$lambda,
+                           'lambda_cv'=lambda_cv$lambda,
+                           'lambda_sure'=lambda_sure$lambda,
+                           'lambda_fdr'=lambda_fdr$lambda)
+
+lambda_bumps %>% apply(FUN=mean, MARGIN=2) %>% round(2) %>% 
+  kbl(booktabs=T, caption='lambda médio') %>% 
+  kable_styling(position='center', latex_options='HOLD_position')
+```
+
+
+```{r lambda, fig.height=9}
+
+
+stack(select(lambda_bumps, -c(lambda_1,lambda_2))) %>%
+  ggplot(aes(x=ind, y=values)) +
+  geom_boxplot() +
+  labs(title='Valores de lambda')
+```
+
+
+
+
+
+
