@@ -4,14 +4,26 @@ phi_jk <- function(x, j, k=0){
 }
 
 
-# --------  Aproximação de Haar para funções no intervalo [0,1] -------- #
-f_j <- function(wt, x, j){
+# -------- Aproximação de Haar para funções no intervalo [0,1] -------- #
+f_j <- function(x, fun, j, wt=0){
   apx <- 0
-  for (k in 1:length(accessC(wt, level=j))){
-    apx <- apx + accessC(wt, level=j)[k] * phi_jk(x, j, k-1)
+  integrais <- vector(mode='numeric')
+  pontos <- seq(0,1, length=1 + 2^j)
+  
+  for (k in 1:(length(pontos)-1)){
+    integrais <- append(integrais,
+                        integrate(fun, pontos[k], pontos[k+1])$value)
   }
+  
+  c <- integrais * 2^(j/2)
+  
+  for (k in 1:length(c)){
+    apx <- apx + c[k]*phi_jk(x, j, k-1)
+  }
+  
   return(apx)
 }
+
 
 
 # -------- Função de simulação -------- #
