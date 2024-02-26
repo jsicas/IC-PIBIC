@@ -77,6 +77,7 @@ plot(bumps, type='l', main='Função Original', las=1)
 # Simulações das propostas de $\lambda$
 
 ```{r simulacoes, echo=T}
+set.seed(282828)
 n <- 1000
 lambda_1 <- simulacao(bumps, SNR=2, rep=n, policy='manual', lambda=1.2)
 lambda_2 <- simulacao(bumps, SNR=2, rep=n, policy='manual', lambda=50)
