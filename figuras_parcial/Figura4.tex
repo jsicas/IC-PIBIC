@@ -1,0 +1,53 @@
+\documentclass{article}
+\usepackage{tikz}
+\usepackage{subfigure}
+
+\begin{document}
+\begin{figure}
+	\hfill
+	\subfigure[Regra de limiar Duro]{\begin{tikzpicture}
+		% Eixos
+		\draw[->, >=latex] (-2.5,0) -- (2.5,0) node[anchor=west] {$d^*$};
+		\draw[->, >=latex] (0,-2) -- (0,2) node[anchor=east] {$\delta^H_\lambda(d^*)$};
+		
+		% Gráfico
+		\draw[line width = 1pt] (-2, -2) -- (-1,-1);
+		\draw[line width = 1pt, dashed] (-1,-1) -- (-1, 0);
+		\draw[line width = 1pt] (-1,0) -- (1, 0);
+		\draw[line width = 1pt, dashed] (1,0) -- (1, 1);
+		\draw[line width = 1pt] (1,1) -- (2, 2);
+		
+		% Pontos
+		\node[anchor=south] at (-1,0) {$-\lambda$};
+		\node[anchor=north] at (1,0) {$\lambda$};
+		\draw (3pt,1) -- (-3pt, 1);
+		\node[anchor=west] at (0,1) {$\lambda$};
+		\draw (3pt,-1) -- (-3pt, -1);
+		\node[anchor=east] at (0,-1) {$-\lambda$};
+		
+		% Título
+		% \node[above, font=\large] at (current bounding box.north) {Limiar Duro};
+	\end{tikzpicture}}
+	\hfill
+	\subfigure[Regra de limiar suave]{\begin{tikzpicture}
+		% Eixos
+		\draw[->, >=latex] (-2.5,0) -- (2.5,0) node[anchor=west] {$d^*$};
+		\draw[->, >=latex] (0,-2) -- (0,2) node[anchor=east] {$\delta^S_\lambda(d^*)$};
+		
+		% Gráfico
+		\draw[line width = 1pt] (-2.5, -1.5) -- (-1,0);
+		\draw[line width = 1pt] (-1,0) -- (1, 0);
+		\draw[line width = 1pt] (1,0) -- (2.5, 1.5);
+		
+		% Pontos
+		\node[anchor=south] at (-1,0) {$-\lambda$};
+		\node[anchor=north] at (1,0) {$\lambda$};
+		
+		% Título
+		% \node[above, font=\large] at (current bounding box.north) {Limiar Suave};
+	\end{tikzpicture}}
+	\hfill
+	\caption{Regra de limiar duro e suave}
+	\label{fig: hard e soft thresholding functions}
+\end{figure}
+\end{document}
