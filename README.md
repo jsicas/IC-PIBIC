@@ -1,6 +1,6 @@
 Aqui podem ser encontrados alguns dos arquivos gerados durante a Iniciação Científica (IC), os quais se caracterizam por:
 
-  * Figuras do relatório parcial na pasta `figuras_parcial`
+  * Figuras do relatório parcial na pasta `figuras_parcial`;
   * O arquivo `Funcoes_criadas.R` apresenta todas as funções criadas:
     * `phi_jk` - Função $\phi_{jk}$ (ondaleta pai de Haar) utilizando a notação de translação escala;
     * `f_j` - Aproximação de Haar para função no intervalo $[0,1]$;
