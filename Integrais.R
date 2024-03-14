@@ -1,74 +1,74 @@
-library(bayesShrink)
-
-# -------- Função -------- #
+# -------- Shrinkage da logistica -------- #
 # d - coeficientes empiricos
-# t - parâmetro da logistica
 # a - alpha
 # s - desvio padrão
+# t - parâmetro da logistica
 
-LogShrink <- function(d, t, a, s){
-  # Criando variáveis
-  n <- length(d)
-  u <- rnorm(n)
-  int.1 <- vector(mode='numeric')
-  int.2 <- vector(mode='numeric')
+LogisShrink <- function(d, a, s, t){
+  u <- rnorm(5000)
+  delta <- vector(mode='double')
   
-  # f.d.p. logistica
-  logistica <- function(x){
-    exp(-x/t)/(t * (1 + exp(-x/t)))^2
+  for(i in 1:length(d)){
+    int1 <- mean((s*u + d[i]) * dlogis(s*u + d[i], scale=t))
+    int2 <- mean(dlogis(s*u + d[i], scale=t))
+    delta[i] <- (1-a) * int1/(a * dnorm(d[i], sd=s)/s + (1-a) * int2)
   }
   
-  # Apoximando as integrais
-  for (i in 1:n){
-    int.1[i] <- (s*u[i] + d[i]) * logistica(s*u[i] + d[i])
-    int.2[i] <- logistica(s*u[i] + d[i])
-  }
-  
-  num <- (1-a) * mean(int.1)
-  den <- a * dnorm(d/s)/s + (1-a) * mean(int.2)
-  
-  return(num/den)
+  return(delta)
 }
 
 
-# -------- Testes -------- #
-set.seed(282829)
+# -------- Exemplo -------- #
+# Definindo parâmetros
+x <- seq(-7, 7, 0.05)
+t <- c(3, 5, 10, 20, 30, 40, 50)
+a <- c(0.3, 0.5, 0.8, 0.9, 0.99)
 
 
-LogShrink(c(0,1,2,3), 1, 0.8, 1)
+# Variando t e alpha
+## Variando t para alpha=0.8
+par(mfrow=c(1,2), cex.axis=1.3, cex.main=1.3, mai=c(0.5, 0.7, 0.7, 0.5))
 
-
-curve(LogShrink(x, t=1, a=0.8    , s=1), from=-6, to=6)
-curve(logshrink(x, t=1, alpha=0.8, s=1), from=-6, to=6)
-
-
-uu <- rnorm(1)
-logistica_t <- function(x, t){
-  exp(-x/t)/(t * (1 + exp(-x/t)))^2
+plot(x=1, main='Variando t', type='n',
+     xlab='', ylab='', xlim=c(-6,6), ylim=c(-6,6))
+abline(v=c(-3, 0, 3), h=0, lty=c(1,9,1,9))
+for (i in 1:length(t)){
+  lines(x, LogisShrink(x, 0.8, 1, t[i]), col=i)
 }
-s <- 1
-d <- 1
-a <- 0.9
-
-apx1 <- (s*uu + d) * logistica_t(s*uu + d, t=1)
-apx2 <- logistica_t(s*uu + d, t=1)
-
-n1 <- (1-a) * apx1
-d1 <- a * dnorm(d/s)/s + (1-a) * mean(apx2)
-r1 <- n1/d1
-r1
 
 
-# bayesShrink
-t <- 1
-
-x = (s * uu + d) * (cosh((s * uu + d)/(2 * t)))^(-2)
-int1 = mean(x)
-y = (cosh((s * uu + d)/(2 * t)))^(-2)
-int2 = mean(y)
-num = (1 - a) * int1
-den = 4 * t * a * dnorm(d, 0, s)/s + (1 - a) * int2
-logshrink = num/den
-logshrink
+## Variando alpha para t=10
+plot(x=1, main=expression(bold(Variando ~ alpha)), type='n',
+     xlab='', ylab='', xlim=c(-6,6), ylim=c(-6,6))
+abline(v=c(-3, 0, 3), h=0, lty=c(1,9,1,9))
+for (i in 1:length(a)){
+  lines(x, LogisShrink(x, a[i], 1, 10), col=i)
+}
 
 
+# 3 modelos para alpha=0.6,0.9,0.99 e variando t
+par(mfrow=c(1,3), cex.axis=1.6, cex.main=2.2, mai=c(0.5, 0.5, 0.5, 0.2))
+
+# alpha=0.6
+plot(x=1, main=expression(bold(alpha == 0.6)), type='n',
+     xlab='', ylab='', xlim=c(-6,6), ylim=c(-6,6))
+abline(v=c(-3, 0, 3), h=0, lty=c(1,9,1,9))
+for (i in 1:length(a)){
+  lines(x, LogisShrink(x, 0.6, 1, t[i]), col=i)
+}
+
+# alpha=0.9
+plot(x=1, main=expression(bold(alpha == 0.9)), type='n',
+     xlab='', ylab='', xlim=c(-6,6), ylim=c(-6,6))
+abline(v=c(-3, 0, 3), h=0, lty=c(1,9,1,9))
+for (i in 1:length(a)){
+  lines(x, LogisShrink(x, 0.9, 1, t[i]), col=i)
+}
+
+# alpha=0.99
+plot(x=1, main=expression(bold(alpha == 0.99)), type='n',
+     xlab='', ylab='', xlim=c(-6,6), ylim=c(-6,6))
+abline(v=c(-3, 0, 3), h=0, lty=c(1,9,1,9))
+for (i in 1:length(a)){
+  lines(x, LogisShrink(x, 0.99, 1, t[i]), col=i)
+}
