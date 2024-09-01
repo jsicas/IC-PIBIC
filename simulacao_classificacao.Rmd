@@ -1,0 +1,400 @@
+---
+title: 'Simulação'
+output: pdf_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#------- Packages -------#
+set.seed(282829)
+require(wavethresh)
+require(magrittr)
+require(dplyr)
+```
+
+
+
+```{r, fig.align='center', fig.height=4, fig.width=6}
+#------- Funções -------#
+
+# fun_real - pontos da função original
+# fun_mod - pontos da função modificada
+# snr - razão sinal-ruído (snr=sd(sinal)/sd(ruido))
+# rep - número de replicações
+# n_treino - número de curvas por classes para treino
+# n_teste - número de curvas por classes para teste
+# signal = sd(sinal)
+
+# Tentar paralelizar
+
+class_wave <- function(fun_real, fun_mod, snr, rep, n_treino, n_teste=NULL, signal=7){
+  # configuracoes
+  require(wavethresh)
+  require(magrittr)
+  if (is.null(n_teste)) n_teste <- n_treino
+
+  n <- length(fun_real)  # quantidade de pontos por curva
+  resposta <- vector('list', rep)
+
+  # normalizando
+  fun_real <- fun_real/sd(fun_real) * signal
+  fun_mod <- fun_mod/sd(fun_mod) * signal
+  # replicando
+  for (i in 1:rep) {
+    # amostra treino
+    treino <- matrix(nrow = 2*n_treino, ncol = n)
+    
+    for (j in 1:n_treino) {
+      treino[2*j - 1, ] <- fun_real + rnorm(n, 0, signal/snr)  # impar = C1
+      treino[2*j, ] <- fun_mod + rnorm(n, 0, signal/snr)       # par = C2
+    }
+    
+    # DWT e formatação dos dados
+    wav_treino <- apply(treino, 1, wd) %>%
+      sapply(function(x = threshold(treino)) c(x$D, accessC(x, level=0))) %>%
+      t() %>% data.frame()
+    
+    wav_treino$c <- factor(rep(c('C1', 'C2'), n_treino))  # classes
+    
+    # treinando modelo
+    fit <- glm(c ~ . , data=wav_treino, family=binomial)
+    
+    # amostra teste
+    teste <- matrix(nrow = 2*n_teste, ncol = n)
+    
+    for (j in 1:n_teste) {
+      teste[2*j - 1, ] <- fun_real + rnorm(n, 0, signal/snr)  # impar = C1
+      teste[2*j, ] <- fun_mod + rnorm(n, 0, signal/snr)       # par = C2
+    }
+    
+    wv_teste <- apply(teste, 1, wd) %>%
+      sapply(function(x = threshold(teste)) c(x$D, accessC(x, level=0))) %>%
+      t() %>% data.frame()
+    
+    # resultado do modelo
+    predicao <- predict(fit, type = 'response', newdata = data.frame(wv_teste))
+    class_modelo <- ifelse(predicao > 0.5, 'C2', 'C1')
+    resposta[i] <- list(table('Modelo' = class_modelo,
+                         'Classe Verdadeira' = factor(rep(c('C1', 'C2'), n_teste))))
+  }
+  return(resposta)
+}
+
+# função auxiliar
+fun_aux <- function(lista) {
+  resultado <- vector('numeric', 4)
+  for (i in 1:4) {
+    resultado[i] <- sapply(lista, `[`, i) %>% mean()
+  }
+  return(data.frame('classe_verdadeira'=c('C1', 'C1', 'C2', 'C2'),
+             'classificador'=c('C1', 'C2', 'C1', 'C2'),
+             'valores'=resultado,
+             'percent'=prop.table(resultado)))
+}
+
+#------- Codigo -------#
+
+# função (spahet)
+spahet <- function(x) sqrt(x * (1 - x)) * sin(2 * pi * (1 + 2^(-0.6))/(x + 2^(-0.6)))
+
+# função modificada
+spahet_mod <- function(x) {
+  ifelse(0.2<x & x<0.23,
+         7*x/2 - 0.87,
+         sqrt(x * (1 - x)) * sin(2 * pi * (1 + 2^(-0.6))/(x + 2^(-0.6))))
+}
+
+pts_por_curva_64 <- 64  # número de pontos considerados por curva
+x <- seq(1, pts_por_curva_64)/pts_por_curva_64
+
+spahet_pts_64 <- spahet(x)
+spahet_mod_pts_64 <- spahet_mod(x)
+
+# plot das curvas
+plot(x, spahet_pts_64, lwd=2, ylab='y', type='l')
+lines(x, spahet_mod_pts_64, lwd=2, lty=2, type='l')
+```
+
+
+```{r, warning=FALSE, eval=F, include=F}
+source('funcoes_criadas/class_wave.R')
+
+# fun_real - pontos da função original
+# fun_mod - pontos da função modificada
+# snr - razão sinal-ruído (snr=sd(sinal)/sd(ruido))
+# rep - número de replicações
+# n_treino - número de curvas por classes para treino
+# n_teste - número de curvas por classes para teste
+# signal = sd(sinal)
+
+spahet3_64 <- class_wave(fun_real=spahet_pts_64, fun_mod=spahet_mod_pts_64, snr=3,
+                    rep=2000, n_treino=1500, n_teste=500)
+
+spahet5_64 <- class_wave(fun_real=spahet_pts_64, fun_mod=spahet_mod_pts_64, snr=5,
+                    rep=2000, n_treino=1500, n_teste=500)
+
+spahet9_64 <- class_wave(fun_real=spahet_pts_64, fun_mod=spahet_mod_pts_64, snr=9,
+                    rep=2000, n_treino=1500, n_teste=500)
+```
+
+\begin{table}[hb]
+\centering
+\caption{Spahet, $SNR=3$, 64 pontos por curva}
+\begin{tabular}{c|cc}\hline\hline
+              & \multicolumn{2}{c}{Classe Verdadeira}\\\hline
+Classificador & C1           & C2\\
+          C1  & 399.857      & 100.302\\
+          C2  & 100.143      & 399.698\\\hline\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[hb]
+\centering
+\caption{Spahet, $SNR=5$, 64 pontos por curva}
+\begin{tabular}{c|cc}\hline\hline
+              & \multicolumn{2}{c}{Classe Verdadeira}\\\hline
+Classificador & C1           & C2\\
+          C1  & 460.136      & 39.778\\
+          C2  & 39.865       & 460.222\\\hline\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[hb]
+\centering
+\caption{Spahet, $SNR=9$, 64 pontos por curva}
+\begin{tabular}{c|cc}\hline\hline
+              & \multicolumn{2}{c}{Classe Verdadeira}\\\hline
+Classificador & C1           & C2\\
+          C1  & 494.101      & 5.932\\
+          C2  & 5.899        & 494.068\\\hline\hline
+\end{tabular}
+\end{table}
+
+```{r, fig.align='center', fig.height=4, fig.width=6, echo=F}
+pts_por_curva_32 <- 32  # número de pontos considerados por curva
+x_32 <- seq(1, pts_por_curva_32)/pts_por_curva_32
+
+spahet_pts_32 <- spahet(x_32)
+spahet_mod_pts_32 <- spahet_mod(x_32)
+
+# plot das curvas
+plot(x_32, spahet_pts_32, lwd=2, ylab='y', type='l')
+lines(x_32, spahet_mod_pts_32, lwd=2, lty=2, type='l')
+```
+
+```{r, warning=FALSE, eval=F, echo=F}
+spahet3_32 <- class_wave(fun_real=spahet_pts_32, fun_mod=spahet_mod_pts_32, snr=3,
+                       rep=2000, n_treino=1500, n_teste=500)
+
+spahet5_32 <- class_wave(fun_real=spahet_pts_32, fun_mod=spahet_mod_pts_32, snr=5,
+                       rep=2000, n_treino=1500, n_teste=500)
+
+spahet9_32 <- class_wave(fun_real=spahet_pts_32, fun_mod=spahet_mod_pts_32, snr=9,
+                       rep=2000, n_treino=1500, n_teste=500)
+
+fun_aux(spahet3_32)
+fun_aux(spahet5_32)
+fun_aux(spahet9_32)
+```
+
+\begin{table}[hb]
+\centering
+\caption{Spahet, $SNR=3$, 32 pontos por curva}
+\begin{tabular}{c|cc}\hline\hline
+              & \multicolumn{2}{c}{Classe Verdadeira}\\\hline
+Classificador & C1           & C2\\
+          C1  & 399.502      & 100.971\\
+          C2  & 100.499      & 399.03\\\hline\hline
+\end{tabular}
+\end{table}
+
+
+\begin{table}[hb]
+\centering
+\caption{Spahet, $SNR=5$, 32 pontos por curva}
+\begin{tabular}{c|cc}\hline\hline
+              & \multicolumn{2}{c}{Classe Verdadeira}\\\hline
+Classificador & C1           & C2\\
+          C1  & 459.624      & 40.795\\
+          C2  & 40.377       & 459.206\\\hline\hline
+\end{tabular}
+\end{table}
+
+
+\begin{table}[hb]
+\centering
+\caption{Spahet, $SNR=9$, 32 pontos por curva}
+\begin{tabular}{c|cc}\hline\hline
+              & \multicolumn{2}{c}{Classe Verdadeira}\\\hline
+Classificador & C1           & C2\\
+          C1  & 495.168      & 4.823\\
+          C2  & 4.832        & 495.178\\\hline\hline
+\end{tabular}
+\end{table}
+
+
+
+```{r, echo=F}
+# função (spahet)
+heavisine <- function(x) 4 * sin(4 * pi * x) - sign(x - 0.3) - sign(0.72 - x)
+
+# função modificada
+heavisine_mod <- function(x) 4 * sin(4 * pi * x) - sign(x - 0.35) - sign(0.72 - x)
+
+pts_por_curva_64 <- 64  # número de pontos considerados por curva
+x <- seq(1, pts_por_curva_64)/pts_por_curva_64
+
+heavisine_pts_64 <- heavisine(x)
+heavisine_mod_pts_64 <- heavisine_mod(x)
+
+# plot das curvas
+plot(x, heavisine_pts_64, lwd=2, ylab='y', type='l')
+lines(x, heavisine_mod_pts_64, lwd=2, lty=2, type='l')
+```
+
+
+
+```{r, eval=F, echo=F}
+heavi3_64 <- class_wave(fun_real=heavisine_pts_64, fun_mod=heavisine_mod_pts_64,
+                        snr=3, rep=2000, n_treino=1500, n_teste=500)
+
+heavi5_64 <- class_wave(fun_real=heavisine_pts_64, fun_mod=heavisine_mod_pts_64,
+                        snr=5, rep=2000, n_treino=1500, n_teste=500)
+
+heavi9_64 <- class_wave(fun_real=heavisine_pts_64, fun_mod=heavisine_mod_pts_64,
+                        snr=9, rep=2000, n_treino=1500, n_teste=500)
+
+```
+
+
+\begin{table}[hb]
+\centering
+\caption{Heavisine, $SNR=3$, 64 pontos por curva}
+\begin{tabular}{c|cc}\hline\hline
+              & \multicolumn{2}{c}{Classe Verdadeira}\\\hline
+Classificador & C1           & C2\\
+          C1  & 474.798      & 25.013\\
+          C2  & 25.202       & 474.987\\\hline\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[hb]
+\centering
+\caption{Heavisine, $SNR=5$, 64 pontos por curva}
+\begin{tabular}{c|cc}\hline\hline
+              & \multicolumn{2}{c}{Classe Verdadeira}\\\hline
+Classificador & C1           & C2\\
+          C1  & 496.578      & 3.282\\
+          C2  & 3.422        & 496.719\\\hline\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[hb]
+\centering
+\caption{Heavisine, $SNR=9$, 64 pontos por curva}
+\begin{tabular}{c|cc}\hline\hline
+              & \multicolumn{2}{c}{Classe Verdadeira}\\\hline
+Classificador & C1           & C2\\
+          C1  & 499.999      & 0.0010\\
+          C2  & 0.0015        & 499.999\\\hline\hline
+\end{tabular}
+\end{table}
+
+
+
+```{r, echo=F}
+pts_por_curva_32 <- 32  # número de pontos considerados por curva
+x <- seq(1, pts_por_curva_32)/pts_por_curva_32
+
+heavisine_pts_32 <- heavisine(x)
+heavisine_mod_pts_32 <- heavisine_mod(x)
+
+# plot das curvas
+plot(x, heavisine_pts_32, lwd=2, ylab='y', type='l')
+lines(x, heavisine_mod_pts_32, lwd=2, lty=2, type='l')
+```
+
+
+```{r, eval=F, echo=F}
+heavi3_32 <- class_wave(fun_real=heavisine_pts_32, fun_mod=heavisine_mod_pts_32,
+                        snr=3, rep=2000, n_treino=1500, n_teste=500)
+
+heavi5_32 <- class_wave(fun_real=heavisine_pts_32, fun_mod=heavisine_mod_pts_32,
+                        snr=5, rep=2000, n_treino=1500, n_teste=500)
+
+heavi9_32 <- class_wave(fun_real=heavisine_pts_32, fun_mod=heavisine_mod_pts_32,
+                        snr=9, rep=2000, n_treino=1500, n_teste=500)
+
+fun_aux(heavi3_32)
+fun_aux(heavi5_32)
+fun_aux(heavi9_32)
+```
+
+\begin{table}[hb]
+\centering
+\caption{Heavisine, $SNR=3$, 32 pontos por curva}
+\begin{tabular}{c|cc}\hline\hline
+              & \multicolumn{2}{c}{Classe Verdadeira}\\\hline
+Classificador & C1            & C2\\
+          C1  & 454.925      & 45.338\\
+          C2  & 45.076       & 454.663\\\hline\hline
+\end{tabular}
+\end{table}
+
+
+\begin{table}[htb]
+\centering
+\caption{Heavisine, $SNR=5$, 32 pontos por curva}
+\begin{tabular}{c|cc}\hline\hline
+              & \multicolumn{2}{c}{Classe Verdadeira}\\\hline
+Classificador & C1            & C2\\
+          C1  & 492.701      & 7.308\\
+          C2  & 7.300        & 492.693 \\\hline\hline
+\end{tabular}
+\end{table}
+
+
+\begin{table}[hb]
+\centering
+\caption{Heavisine, $SNR=9$, 32 pontos por curva}
+\begin{tabular}{c|cc}\hline\hline
+              & \multicolumn{2}{c}{Classe Verdadeira}\\\hline
+Classificador & C1            & C2\\
+          C1  & 499.954       & 0.053\\
+          C2  & 0.047         & 499.947\\\hline\hline
+\end{tabular}
+\end{table}
+
+
+
+
+
+
+
+
+<!-- \begin{table}[hb] -->
+<!-- \centering -->
+<!-- \caption{$SNR=3$, 64 pontos por curva, 2000 curvas por classe, 1000 ajustes} -->
+<!-- \begin{tabular}{cccc}\hline\hline -->
+<!--   Classificador     & Classe verdadeira  & percentual de acerto\\\hline -->
+<!-- C1  &              C1    & $40.53$\\ -->
+<!-- C1  &              C2    & $9.46$\\ -->
+<!-- C2  &              C1    & $9.47$\\ -->
+<!-- C2  &              C2    & $40.54$\\\hline\hline -->
+<!-- \end{tabular} -->
+<!-- \end{table} -->
+
+<!-- \begin{table}[hb] -->
+<!-- \centering -->
+<!-- \caption{$SNR=5$, 64 pontos por curva, 2000 curvas por classe, 1000 ajustes} -->
+<!-- \begin{tabular}{cccc}\hline\hline -->
+<!--   Classificador     & Classe verdadeira  & percentual de acerto\\\hline -->
+<!-- C1  &              C1    & $46.42$\\ -->
+<!-- C1  &              C2    & $3.57$\\ -->
+<!-- C2  &              C1    & $3.58$\\ -->
+<!-- C2  &              C2    & $46.43$\\\hline\hline -->
+<!-- \end{tabular} -->
+<!-- \end{table} -->
